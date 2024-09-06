@@ -1,3 +1,10 @@
+# Ignore the entire dev folder
+dev/
+# Ignore log files
+*.log
+# Ignore environment variables file
+.env
+
 # vscode
 .vscode 
 

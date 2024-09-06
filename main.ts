@@ -1,134 +1,144 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Plugin, TFolder, TFile, Notice } from 'obsidian';
+import { PDFDocument } from 'pdf-lib';  // Import pdf-lib for PDF generation
 
-// Remember to rename these classes and interfaces!
-
-interface MyPluginSettings {
-	mySetting: string;
-}
-
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
-
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
-
+export default class DramaPlugin extends Plugin {
 	async onload() {
-		await this.loadSettings();
-
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
-
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
+		// Register the "Convert to Drama Project Folder" command in the command palette and right-click menu
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu, folder) => {
+				if (folder instanceof TFolder) {
+					menu.addItem((item) => {
+						item.setTitle("Convert to Drama Project Folder")
+							.setIcon("folder")
+							.onClick(() => this.createDramaProjectFolder(folder));
+					});
 				}
+			})
+		);
+
+		// Right-click "New Scene" in version folder (e.g., v0001)
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu, folder) => {
+				if (folder instanceof TFolder && folder.name.startsWith('v')) {
+					menu.addItem((item) => {
+						item.setTitle("New Scene")
+							.setIcon("document")
+							.onClick(() => this.createNewScene(folder));
+					});
+				}
+			})
+		);
+
+		// Right-click "Duplicate to Version Folder" on version folder (e.g., v0001)
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu, folder) => {
+				if (folder instanceof TFolder && folder.name.startsWith('v')) {
+					menu.addItem((item) => {
+						item.setTitle("Duplicate to Version Folder")
+							.setIcon("documents")
+							.onClick(() => this.duplicateVersionFolder(folder));
+					});
+				}
+			})
+		);
+
+		// Right-click "Export Manuscript to PDF" on version folder (e.g., v0001)
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu, folder) => {
+				if (folder instanceof TFolder && folder.name.startsWith('v')) {
+					menu.addItem((item) => {
+						item.setTitle("Export Manuscript to PDF")
+							.setIcon("pdf")
+							.onClick(() => this.exportManuscriptToPDF(folder));
+					});
+				}
+			})
+		);
+
+		// Register apply style commands for Character, Dialogue, and Stage Directions
+		this.addCommand({
+			id: 'apply-character-style',
+			name: 'Apply Character Style',
+			hotkey: [{ modifiers: ["Mod", "Shift"], key: "C" }],
+			editorCallback: (editor, view) => {
+				let selectedText = editor.getSelection();
+				editor.replaceSelection(`**${selectedText.toUpperCase()}**`);
 			}
 		});
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
+		this.addCommand({
+			id: 'apply-dialogue-style',
+			name: 'Apply Dialogue Style',
+			hotkey: [{ modifiers: ["Mod", "Shift"], key: "D" }],
+			editorCallback: (editor, view) => {
+				let selectedText = editor.getSelection();
+				editor.replaceSelection(selectedText);  // Removes any formatting
+			}
 		});
 
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+		this.addCommand({
+			id: 'apply-stage-directions-style',
+			name: 'Apply Stage Directions Style',
+			hotkey: [{ modifiers: ["Mod", "Shift"], key: "S" }],
+			editorCallback: (editor, view) => {
+				let selectedText = editor.getSelection();
+				editor.replaceSelection(`_${selectedText}_`);
+			}
+		});
 	}
 
-	onunload() {
-
+	// Function to create the Drama Project Folder
+	async createDramaProjectFolder(folder: TFolder) {
+		let versionFolder = await this.app.vault.createFolder(folder.path + '/v0001');
+		await this.app.vault.create(versionFolder.path + '/v0001_title_page.md', '# Title Page');
+		await this.app.vault.create(versionFolder.path + '/v0001_notes.md', '# Notes');
+		await this.app.vault.create(versionFolder.path + '/v0001_scene0001.md', '# Scene 1');
+		new Notice('Drama Project Folder Created');
 	}
 
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+	// Function to create a new scene in a version folder
+	async createNewScene(folder: TFolder) {
+		let sceneFiles = folder.children.filter(child => child.name.startsWith('v') && child.name.includes('scene'));
+		let nextSceneNumber = sceneFiles.length + 1;
+		let sceneFileName = `${folder.path}/v${folder.name.substring(1)}_scene${nextSceneNumber.toString().padStart(4, '0')}.md`;
+		await this.app.vault.create(sceneFileName, `# Scene ${nextSceneNumber}`);
+		new Notice(`Scene ${nextSceneNumber} Created`);
 	}
 
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
-}
+	// Function to duplicate a version folder with all its contents
+	async duplicateVersionFolder(folder: TFolder) {
+		let versionFolders = folder.parent.children.filter(f => f instanceof TFolder && f.name.startsWith('v'));
+		let nextVersionNumber = versionFolders.length + 1;
+		let newVersionFolder = await this.app.vault.createFolder(folder.parent.path + `/v${nextVersionNumber.toString().padStart(4, '0')}`);
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
-
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
-
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
+		for (let file of folder.children) {
+			if (file instanceof TFile) {
+				let newFileName = file.name.replace(folder.name, newVersionFolder.name);
+				let content = await this.app.vault.read(file);
+				await this.app.vault.create(newVersionFolder.path + `/${newFileName}`, content);
+			}
+		}
+		new Notice(`Version ${nextVersionNumber} Duplicated`);
 	}
 
-	display(): void {
-		const {containerEl} = this;
+	// Function to export all notes in a version folder to a single PDF
+	async exportManuscriptToPDF(folder: TFolder) {
+		let pdfDoc = await PDFDocument.create();
 
-		containerEl.empty();
+		for (let file of folder.children) {
+			if (file instanceof TFile) {
+				let content = await this.app.vault.read(file);
+				let page = pdfDoc.addPage();
+				page.drawText(content);
+			}
+		}
 
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
+		let pdfBytes = await pdfDoc.save();
+		let blob = new Blob([pdfBytes], { type: "application/pdf" });
+		let link = document.createElement('a');
+		link.href = URL.createObjectURL(blob);
+		link.download = `${folder.name}.pdf`;
+		link.click();
+		new Notice('Manuscript Exported to PDF');
 	}
 }
