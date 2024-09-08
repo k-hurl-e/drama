@@ -10,6 +10,20 @@ export default class DramaPlugin extends Plugin {
 		// Register plugin settings (for specifying Writing Folder)
 		this.addSettingTab(new DramaSettingTab(this.app, this));
 
+		// Create New Version Folder
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu, folder) => {
+				// Only allow "Create New Version Folder" in Project Folders
+				if (folder instanceof TFolder && this.isProjectFolder(folder)) {
+					menu.addItem((item) => {
+						item.setTitle("Create New Version Folder")
+							.setIcon("folder")
+							.onClick(() => this.createNewVersionFolder(folder));
+					});
+				}
+			})
+		);
+		
 		// Register commands for applying styles
 		this.addCommand({
 			id: "apply-character-style",
