@@ -1,25 +1,29 @@
 import { App, Plugin, TFolder, TFile, Notice } from 'obsidian';
-import { PDFDocument } from 'pdf-lib';  // Import pdf-lib for PDF generation
 
 export default class DramaPlugin extends Plugin {
+	writingFolder: string | null = null;
+
 	async onload() {
-		// Register the "Convert to Drama Project Folder" command in the command palette and right-click menu
+		// Load settings
+		await this.loadSettings();
+
+		// Register plugin settings (for specifying Writing Folder)
+		this.addSettingTab(new DramaSettingTab(this.app, this));
+
+		// Register event to check and ensure proper folder actions
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, folder) => {
-				if (folder instanceof TFolder) {
+				// Only allow "Create New Version Folder" in Project Folders
+				if (folder instanceof TFolder && this.isProjectFolder(folder)) {
 					menu.addItem((item) => {
-						item.setTitle("Convert to Drama Project Folder")
+						item.setTitle("Create New Version Folder")
 							.setIcon("folder")
-							.onClick(() => this.createDramaProjectFolder(folder));
+							.onClick(() => this.createNewVersionFolder(folder));
 					});
 				}
-			})
-		);
 
-		// Right-click "New Scene" in version folder (e.g., v0001)
-		this.registerEvent(
-			this.app.workspace.on("file-menu", (menu, folder) => {
-				if (folder instanceof TFolder && folder.name.startsWith('v')) {
+				// Allow "New Scene" creation in Version Folders
+				if (folder instanceof TFolder && this.isVersionFolder(folder)) {
 					menu.addItem((item) => {
 						item.setTitle("New Scene")
 							.setIcon("document")
@@ -28,117 +32,89 @@ export default class DramaPlugin extends Plugin {
 				}
 			})
 		);
-
-		// Right-click "Duplicate to Version Folder" on version folder (e.g., v0001)
-		this.registerEvent(
-			this.app.workspace.on("file-menu", (menu, folder) => {
-				if (folder instanceof TFolder && folder.name.startsWith('v')) {
-					menu.addItem((item) => {
-						item.setTitle("Duplicate to Version Folder")
-							.setIcon("documents")
-							.onClick(() => this.duplicateVersionFolder(folder));
-					});
-				}
-			})
-		);
-
-		// Right-click "Export Manuscript to PDF" on version folder (e.g., v0001)
-		this.registerEvent(
-			this.app.workspace.on("file-menu", (menu, folder) => {
-				if (folder instanceof TFolder && folder.name.startsWith('v')) {
-					menu.addItem((item) => {
-						item.setTitle("Export Manuscript to PDF")
-							.setIcon("pdf")
-							.onClick(() => this.exportManuscriptToPDF(folder));
-					});
-				}
-			})
-		);
-
-		// Register apply style commands for Character, Dialogue, and Stage Directions
-		this.addCommand({
-			id: 'apply-character-style',
-			name: 'Apply Character Style',
-			hotkey: [{ modifiers: ["Mod", "Shift"], key: "C" }],
-			editorCallback: (editor, view) => {
-				let selectedText = editor.getSelection();
-				editor.replaceSelection(`**${selectedText.toUpperCase()}**`);
-			}
-		});
-
-		this.addCommand({
-			id: 'apply-dialogue-style',
-			name: 'Apply Dialogue Style',
-			hotkey: [{ modifiers: ["Mod", "Shift"], key: "D" }],
-			editorCallback: (editor, view) => {
-				let selectedText = editor.getSelection();
-				editor.replaceSelection(selectedText);  // Removes any formatting
-			}
-		});
-
-		this.addCommand({
-			id: 'apply-stage-directions-style',
-			name: 'Apply Stage Directions Style',
-			hotkey: [{ modifiers: ["Mod", "Shift"], key: "S" }],
-			editorCallback: (editor, view) => {
-				let selectedText = editor.getSelection();
-				editor.replaceSelection(`_${selectedText}_`);
-			}
-		});
 	}
 
-	// Function to create the Drama Project Folder
-	async createDramaProjectFolder(folder: TFolder) {
-		let versionFolder = await this.app.vault.createFolder(folder.path + '/v0001');
-		await this.app.vault.create(versionFolder.path + '/v0001_title_page.md', '# Title Page');
-		await this.app.vault.create(versionFolder.path + '/v0001_notes.md', '# Notes');
-		await this.app.vault.create(versionFolder.path + '/v0001_scene0001.md', '# Scene 1');
-		new Notice('Drama Project Folder Created');
+	// Function to identify the Writing Folder
+	isWritingFolder(folder: TFolder): boolean {
+		// Treat root as the Writing Folder if none is specified
+		if (!this.writingFolder) {
+			return folder.path === "/";
+		}
+		return folder.path === this.writingFolder;
 	}
 
-	// Function to create a new scene in a version folder
+	// Function to check if a folder is a direct subfolder of the Writing Folder (i.e., a Project Folder)
+	isProjectFolder(folder: TFolder): boolean {
+		const parentFolder = folder.parent;
+		return parentFolder && this.isWritingFolder(parentFolder);
+	}
+
+	// Function to check if a folder is a Version Folder (starts with 'v')
+	isVersionFolder(folder: TFolder): boolean {
+		return /^v\d{4}$/.test(folder.name);
+	}
+
+	// Create a new Version Folder (next available version number)
+	async createNewVersionFolder(folder: TFolder) {
+		// Find the next available version number
+		const versionFolders = folder.children.filter(f => f instanceof TFolder && this.isVersionFolder(f));
+		const nextVersionNumber = versionFolders.length + 1;
+		const newVersionFolder = await this.app.vault.createFolder(`${folder.path}/v${nextVersionNumber.toString().padStart(4, '0')}`);
+
+		// Create default files in the new version folder
+		await this.app.vault.create(`${newVersionFolder.path}/v${nextVersionFolder.name}_0_title_page.md`, '# Title Page');
+		await this.app.vault.create(`${newVersionFolder.path}/v${nextVersionFolder.name}_0_notes.md`, '# Notes');
+		await this.app.vault.create(`${newVersionFolder.path}/v${newVersionFolder.name}_scene0001.md`, '# Scene 1');
+		new Notice(`Version ${nextVersionNumber} Created`);
+	}
+
+	// Create a new Scene in the Version Folder
 	async createNewScene(folder: TFolder) {
-		let sceneFiles = folder.children.filter(child => child.name.startsWith('v') && child.name.includes('scene'));
-		let nextSceneNumber = sceneFiles.length + 1;
-		let sceneFileName = `${folder.path}/v${folder.name.substring(1)}_scene${nextSceneNumber.toString().padStart(4, '0')}.md`;
-		await this.app.vault.create(sceneFileName, `# Scene ${nextSceneNumber}`);
+		// Find the next available scene number
+		const sceneFiles = folder.children.filter(f => f instanceof TFile && f.name.includes('scene'));
+		const nextSceneNumber = sceneFiles.length + 1;
+		const newSceneFileName = `${folder.path}/v${folder.name.substring(1)}_scene${nextSceneNumber.toString().padStart(4, '0')}.md`;
+		await this.app.vault.create(newSceneFileName, `# Scene ${nextSceneNumber}`);
 		new Notice(`Scene ${nextSceneNumber} Created`);
 	}
 
-	// Function to duplicate a version folder with all its contents
-	async duplicateVersionFolder(folder: TFolder) {
-		let versionFolders = folder.parent.children.filter(f => f instanceof TFolder && f.name.startsWith('v'));
-		let nextVersionNumber = versionFolders.length + 1;
-		let newVersionFolder = await this.app.vault.createFolder(folder.parent.path + `/v${nextVersionNumber.toString().padStart(4, '0')}`);
-
-		for (let file of folder.children) {
-			if (file instanceof TFile) {
-				let newFileName = file.name.replace(folder.name, newVersionFolder.name);
-				let content = await this.app.vault.read(file);
-				await this.app.vault.create(newVersionFolder.path + `/${newFileName}`, content);
-			}
-		}
-		new Notice(`Version ${nextVersionNumber} Duplicated`);
+	// Settings: Load the Writing Folder from user settings
+	async loadSettings() {
+		const data = await this.loadData();
+		this.writingFolder = data?.writingFolder ?? null;
 	}
 
-	// Function to export all notes in a version folder to a single PDF
-	async exportManuscriptToPDF(folder: TFolder) {
-		let pdfDoc = await PDFDocument.create();
+	// Save settings for Writing Folder
+	async saveSettings(newSettings: { writingFolder: string }) {
+		await this.saveData({ writingFolder: newSettings.writingFolder });
+		this.writingFolder = newSettings.writingFolder;
+	}
+}
 
-		for (let file of folder.children) {
-			if (file instanceof TFile) {
-				let content = await this.app.vault.read(file);
-				let page = pdfDoc.addPage();
-				page.drawText(content);
-			}
-		}
+// Settings Tab for Obsidian Plugin Settings
+class DramaSettingTab extends PluginSettingTab {
+	plugin: DramaPlugin;
 
-		let pdfBytes = await pdfDoc.save();
-		let blob = new Blob([pdfBytes], { type: "application/pdf" });
-		let link = document.createElement('a');
-		link.href = URL.createObjectURL(blob);
-		link.download = `${folder.name}.pdf`;
-		link.click();
-		new Notice('Manuscript Exported to PDF');
+	constructor(app: App, plugin: DramaPlugin) {
+		super(app, plugin);
+		this.plugin = plugin;
+	}
+
+	display(): void {
+		const { containerEl } = this;
+
+		containerEl.empty();
+		containerEl.createEl('h2', { text: 'Drama Plugin Settings' });
+
+		// Input for Writing Folder
+		new Setting(containerEl)
+			.setName('Writing Folder')
+			.setDesc('Specify the folder that will act as the root for all your playwriting projects.')
+			.addText(text => text
+				.setPlaceholder('Enter path to Writing Folder')
+				.setValue(this.plugin.writingFolder || '')
+				.onChange(async (value) => {
+					await this.plugin.saveSettings({ writingFolder: value.trim() });
+				}));
 	}
 }
