@@ -59,12 +59,13 @@ export default class DramaPlugin extends Plugin {
 		// Find the next available version number
 		const versionFolders = folder.children.filter(f => f instanceof TFolder && this.isVersionFolder(f));
 		const nextVersionNumber = versionFolders.length + 1;
-		const newVersionFolder = await this.app.vault.createFolder(`${folder.path}/v${nextVersionNumber.toString().padStart(4, '0')}`);
+		const newVersionFolderName = `v${nextVersionNumber.toString().padStart(4, '0')}`;
+		const nextVersionFolder = await this.app.vault.createFolder(`${folder.path}/${newVersionFolderName}`);
 
 		// Create default files in the new version folder
-		await this.app.vault.create(`${newVersionFolder.path}/v${nextVersionFolder.name}_0_title_page.md`, '# Title Page');
-		await this.app.vault.create(`${newVersionFolder.path}/v${nextVersionFolder.name}_0_notes.md`, '# Notes');
-		await this.app.vault.create(`${newVersionFolder.path}/v${newVersionFolder.name}_scene0001.md`, '# Scene 1');
+		await this.app.vault.create(`${nextVersionFolder.path}/${newVersionFolderName}_0_title_page.md`, '# Title Page');
+		await this.app.vault.create(`${nextVersionFolder.path}/${newVersionFolderName}_0_notes.md`, '# Notes');
+		await this.app.vault.create(`${nextVersionFolder.path}/${newVersionFolderName}_scene0001.md`, '# Scene 1');
 		new Notice(`Version ${nextVersionNumber} Created`);
 	}
 
