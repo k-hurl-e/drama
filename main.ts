@@ -1,4 +1,4 @@
-import { App, Plugin, TFolder, TFile, Notice } from 'obsidian';
+import { App, Plugin, TFolder, TFile, Notice, PluginSettingTab, Setting } from 'obsidian';
 
 export default class DramaPlugin extends Plugin {
 	writingFolder: string | null = null;
