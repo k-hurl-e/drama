@@ -31,49 +31,40 @@ export default class DramaPlugin extends Plugin {
 			editorCallback: (editor: Editor) => this.applyStageDirectionStyle(editor),
 			hotkeys: [{ modifiers: ["Mod"], key: "3" }],
 		});
-
-		// Right-click menu actions for applying styles
-		this.registerEvent(
-			this.app.workspace.on("file-menu", (menu, folder) => {
-				// Only allow "Create New Version Folder" in Project Folders
-				if (folder instanceof TFolder && this.isProjectFolder(folder)) {
-					menu.addItem((item) => {
-						item.setTitle("Create New Version Folder")
-							.setIcon("folder")
-							.onClick(() => this.createNewVersionFolder(folder));
-					});
-				}
-
-				// Allow "New Scene" creation in Version Folders
-				if (folder instanceof TFolder && this.isVersionFolder(folder)) {
-					menu.addItem((item) => {
-						item.setTitle("New Scene")
-							.setIcon("document")
-							.onClick(() => this.createNewScene(folder));
-					});
-				}
-			})
-		);
 	}
 
-	// Apply Character Style (bold + all caps)
+	// Get the current line where the cursor is located
+	getLineAtCursor(editor: Editor): { text: string, start: CodeMirror.Position, end: CodeMirror.Position } {
+		const cursor = editor.getCursor();
+		const lineText = editor.getLine(cursor.line);
+		const start = { line: cursor.line, ch: 0 };
+		const end = { line: cursor.line, ch: lineText.length };
+		return { text: lineText, start, end };
+	}
+
+	// Replace the current line with formatted text
+	replaceLine(editor: Editor, start: CodeMirror.Position, end: CodeMirror.Position, formattedText: string) {
+		editor.replaceRange(formattedText, start, end);
+	}
+
+	// Apply Character Style (bold + all caps to the current line only)
 	applyCharacterStyle(editor: Editor) {
-		const selectedText = editor.getSelection();
-		const formattedText = `**${selectedText.toUpperCase()}**`;
-		editor.replaceSelection(formattedText);
+		const { text, start, end } = this.getLineAtCursor(editor);
+		const formattedText = `**${text.toUpperCase()}**`;
+		this.replaceLine(editor, start, end, formattedText);
 	}
 
-	// Apply Dialogue Style (plain text, remove formatting)
+	// Apply Dialogue Style (plain text, remove formatting from the current line)
 	applyDialogueStyle(editor: Editor) {
-		const selectedText = editor.getSelection();
-		editor.replaceSelection(selectedText); // No formatting applied
+		const { text, start, end } = this.getLineAtCursor(editor);
+		this.replaceLine(editor, start, end, text); // No formatting applied
 	}
 
-	// Apply Stage Direction Style (italic)
+	// Apply Stage Direction Style (italic to the current line only)
 	applyStageDirectionStyle(editor: Editor) {
-		const selectedText = editor.getSelection();
-		const formattedText = `*${selectedText}*`;
-		editor.replaceSelection(formattedText);
+		const { text, start, end } = this.getLineAtCursor(editor);
+		const formattedText = `*${text}*`;
+		this.replaceLine(editor, start, end, formattedText);
 	}
 
 	// Function to identify the Writing Folder
