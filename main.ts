@@ -1,4 +1,4 @@
-import { App, Plugin, TFolder, TFile, Notice, PluginSettingTab, Setting } from 'obsidian';
+import { App, Plugin, TFolder, TFile, Notice, PluginSettingTab, Setting, Editor } from 'obsidian';
 
 export default class DramaPlugin extends Plugin {
 	writingFolder: string | null = null;
@@ -10,7 +10,29 @@ export default class DramaPlugin extends Plugin {
 		// Register plugin settings (for specifying Writing Folder)
 		this.addSettingTab(new DramaSettingTab(this.app, this));
 
-		// Register event to check and ensure proper folder actions
+		// Register commands for applying styles
+		this.addCommand({
+			id: "apply-character-style",
+			name: "Apply Character Style",
+			editorCallback: (editor: Editor) => this.applyCharacterStyle(editor),
+			hotkeys: [{ modifiers: ["Mod"], key: "1" }],
+		});
+
+		this.addCommand({
+			id: "apply-dialogue-style",
+			name: "Apply Dialogue Style",
+			editorCallback: (editor: Editor) => this.applyDialogueStyle(editor),
+			hotkeys: [{ modifiers: ["Mod"], key: "2" }],
+		});
+
+		this.addCommand({
+			id: "apply-stage-direction-style",
+			name: "Apply Stage Direction Style",
+			editorCallback: (editor: Editor) => this.applyStageDirectionStyle(editor),
+			hotkeys: [{ modifiers: ["Mod"], key: "3" }],
+		});
+
+		// Right-click menu actions for applying styles
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, folder) => {
 				// Only allow "Create New Version Folder" in Project Folders
@@ -32,6 +54,26 @@ export default class DramaPlugin extends Plugin {
 				}
 			})
 		);
+	}
+
+	// Apply Character Style (bold + all caps)
+	applyCharacterStyle(editor: Editor) {
+		const selectedText = editor.getSelection();
+		const formattedText = `**${selectedText.toUpperCase()}**`;
+		editor.replaceSelection(formattedText);
+	}
+
+	// Apply Dialogue Style (plain text, remove formatting)
+	applyDialogueStyle(editor: Editor) {
+		const selectedText = editor.getSelection();
+		editor.replaceSelection(selectedText); // No formatting applied
+	}
+
+	// Apply Stage Direction Style (italic)
+	applyStageDirectionStyle(editor: Editor) {
+		const selectedText = editor.getSelection();
+		const formattedText = `*${selectedText}*`;
+		editor.replaceSelection(formattedText);
 	}
 
 	// Function to identify the Writing Folder
