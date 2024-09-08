@@ -14,21 +14,21 @@ export default class DramaPlugin extends Plugin {
 		this.addCommand({
 			id: "apply-character-style",
 			name: "Apply Character Style",
-			editorCallback: (editor: Editor) => this.applyCharacterStyle(editor),
+			editorCallback: (editor: Editor) => this.toggleCharacterStyle(editor),
 			hotkeys: [{ modifiers: ["Mod"], key: "1" }],
 		});
 
 		this.addCommand({
 			id: "apply-dialogue-style",
 			name: "Apply Dialogue Style",
-			editorCallback: (editor: Editor) => this.applyDialogueStyle(editor),
+			editorCallback: (editor: Editor) => this.toggleDialogueStyle(editor),
 			hotkeys: [{ modifiers: ["Mod"], key: "2" }],
 		});
 
 		this.addCommand({
 			id: "apply-stage-direction-style",
 			name: "Apply Stage Direction Style",
-			editorCallback: (editor: Editor) => this.applyStageDirectionStyle(editor),
+			editorCallback: (editor: Editor) => this.toggleStageDirectionStyle(editor),
 			hotkeys: [{ modifiers: ["Mod"], key: "3" }],
 		});
 	}
@@ -47,36 +47,52 @@ export default class DramaPlugin extends Plugin {
 		editor.replaceRange(formattedText, start, end);
 	}
 
-	// Apply Character Style (bold + all caps to the current line only)
-	applyCharacterStyle(editor: Editor) {
-		const { text, start, end } = this.getLineAtCursor(editor);
-		const formattedText = `**${text.toUpperCase()}**`;
-		this.replaceLine(editor, start, end, formattedText);
+	// Remove all formatting (bold and italic) from the text
+	removeFormatting(text: string): string {
+		return text.replace(/[*_~`]+/g, '').trim(); // Remove markdown formatting
 	}
 
-	// Apply Dialogue Style (plain text, remove formatting from the current line)
-	applyDialogueStyle(editor: Editor) {
+	// Toggle Character Style (bold + all caps to the current line only)
+	toggleCharacterStyle(editor: Editor) {
 		const { text, start, end } = this.getLineAtCursor(editor);
-		this.replaceLine(editor, start, end, text); // No formatting applied
+		const unformattedText = this.removeFormatting(text);
+
+		// If the text is already bold, remove the bold formatting
+		if (text.startsWith('**') && text.endsWith('**')) {
+			this.replaceLine(editor, start, end, unformattedText);
+		} else {
+			// Apply bold + all caps formatting
+			const formattedText = `**${unformattedText.toUpperCase()}**`;
+			this.replaceLine(editor, start, end, formattedText);
+		}
 	}
 
-	// Apply Stage Direction Style (italic to the current line only)
-	applyStageDirectionStyle(editor: Editor) {
-		const { text, start, end } = this.getLineAtCursor(editor);
-		const formattedText = `*${text}*`;
-		this.replaceLine(editor, start, end, formattedText);
-	}
+	// Toggle Stage Direction Style (italic to the current line only)
+toggleStageDirectionStyle(editor: Editor) {
+    const { text, start, end } = this.getLineAtCursor(editor);
+
+    // First, ensure all formatting (bold and italic) is removed
+    let unformattedText = this.removeFormatting(text);
+
+    // Apply italic formatting if not already applied
+    if (text.startsWith('*') && text.endsWith('*')) {
+        this.replaceLine(editor, start, end, unformattedText); // Remove italics if already applied
+    } else {
+        // Apply italic formatting AFTER removing any previous bold (**)
+        const formattedText = `*${unformattedText}*`;
+        this.replaceLine(editor, start, end, formattedText);
+    }
+}
 
 	// Function to identify the Writing Folder
 	isWritingFolder(folder: TFolder): boolean {
-		// Treat root as the Writing Folder if none is specified
 		if (!this.writingFolder) {
 			return folder.path === "/";
 		}
 		return folder.path === this.writingFolder;
 	}
 
-	// Function to check if a folder is a direct subfolder of the Writing Folder (i.e., a Project Folder)
+	// Function to check if a folder is a Project Folder (direct subfolder of Writing Folder)
 	isProjectFolder(folder: TFolder): boolean {
 		const parentFolder = folder.parent;
 		return parentFolder && this.isWritingFolder(parentFolder);
@@ -89,7 +105,6 @@ export default class DramaPlugin extends Plugin {
 
 	// Create a new Version Folder (next available version number)
 	async createNewVersionFolder(folder: TFolder) {
-		// Find the next available version number
 		const versionFolders = folder.children.filter(f => f instanceof TFolder && this.isVersionFolder(f));
 		const nextVersionNumber = versionFolders.length + 1;
 		const newVersionFolderName = `v${nextVersionNumber.toString().padStart(4, '0')}`;
@@ -104,7 +119,6 @@ export default class DramaPlugin extends Plugin {
 
 	// Create a new Scene in the Version Folder
 	async createNewScene(folder: TFolder) {
-		// Find the next available scene number
 		const sceneFiles = folder.children.filter(f => f instanceof TFile && f.name.includes('scene'));
 		const nextSceneNumber = sceneFiles.length + 1;
 		const newSceneFileName = `${folder.path}/v${folder.name.substring(1)}_scene${nextSceneNumber.toString().padStart(4, '0')}.md`;
